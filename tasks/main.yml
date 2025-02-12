@@ -1,0 +1,83 @@
+---
+# tasks file for ansible-bruno
+# Get release
+- name: Get latest Release from Bruno
+  shell: curl -s https://api.github.com/repos/usebruno/bruno/releases/latest | grep tag_name | cut -d '"' -f 4 | tr -d v
+  register: result_version
+  tags: bruno
+
+- set_fact:
+    version: "{{ result_version.stdout }}"
+
+# Install bruno from deb package
+- name: Install a .deb package for Bruno
+  apt:
+    deb: https://github.com/usebruno/bruno/releases/download/v{{ version }}/bruno_{{ version }}_amd64_linux.deb
+  when:
+    - ansible_os_family == "Debian"
+    - ansible_architecture == "x86_64"
+  ignore_errors: true
+  tags: bruno
+
+# Install bruno from dmg package 
+- local_action: stat path=/Applications/{{ appName }}.app
+  register: app_exists
+  when:
+  - ansible_os_family == "Darwin"
+  ignore_errors: true
+  tags: bruno
+
+- command: mkdir -p ./tmp/
+  when: 
+    - ansible_os_family == "Darwin"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- name: Get .dmg package for bruno (ARM64)
+  get_url: url=https://github.com/usebruno/bruno/releases/download/v{{ version }}/bruno_{{ version }}_arm64_mac.dmg
+  when: 
+    - ansible_os_family == "Darwin"
+    - ansible_machine == "arm64"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- name: Get .dmg package for bruno (x86_64)
+  get_url: url=https://github.com/usebruno/bruno/releases/download/v{{ version }}/bruno_{{ version }}_x64_mac.dmg
+  when: 
+    - ansible_os_family == "Darwin"
+    - ansible_architecture == "x86_64"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- name: Mount package for bruno
+  command: hdiutil attach ./tmp/{{ appName }}.dmg -nobrowse -mountpoint ./tmp/{{ appName }}
+  when: 
+    - ansible_os_family == "Darwin"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- name: Install package for bruno
+  shell: cp -aR ./tmp/{{ appName }}/*.app /Applications/{{ appName }}.app
+  when: 
+    - ansible_os_family == "Darwin"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- command: hdiutil detach ./tmp/{{ appName }}/
+  when: 
+    - ansible_os_family == "Darwin"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
+
+- command: rm -R ./tmp/
+  when: 
+    - ansible_os_family == "Darwin"
+    - app_exists.stat.exists == False
+  ignore_errors: true
+  tags: bruno
